@@ -168,30 +168,30 @@ export const updateCategory = async (req, res) => {
 };
 
 
-// export const getSingleCategory = async (req, res) => {
+export const getSingleCategory = async (req, res) => {
 
-//     try {
+    try {
 
-//         const { id } = req.params;
-//         const userId = req.user.sub;
+        const { id } = req.params;
+        const userId = req.user.sub;
 
-//         const category = await Category.findOne({
-//             _id: id,
-//             userId
-//         });
+        const category = await Category.findOne({
+            _id: id,
+            userId
+        });
 
-//         if (!category) {
-//             return res.status(404).json({
-//                 message: "Category Not Found"
-//             });
-//         }
+        if (!category) {
+            return res.status(404).json({
+                message: "Category Not Found"
+            });
+        }
 
-//         return res.status(200).json({ message: "Category Fetched", category });
+        return res.status(200).json({ message: "Category Fetched", category });
 
-//     } catch (error) {
-//         return res.status(500).json({
-//             message: "Server Error"
-//         });
-//     }
-// };
+    } catch (error) {
+        return res.status(500).json({
+            message: "Server Error"
+        });
+    }
+};
 

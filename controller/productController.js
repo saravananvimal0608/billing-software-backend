@@ -2,9 +2,9 @@ import Product from "../model/productModel.js";
 
 export const addProduct = async (req, res) => {
     const userId = req.user.sub;
-    const { productName,originalPrice, productPrice, category } = req.body;
+    const { productName, originalPrice, productPrice, category } = req.body;
     try {
-        if (!productName ||!originalPrice ||  !productPrice || !category) {
+        if (!productName || !originalPrice || !productPrice || !category) {
             return res.status(400).json({ message: "Product Name And Product Price Are Required" })
         }
         const exitstinProduct = await Product.findOne({
@@ -102,21 +102,36 @@ export const getProductsByCategory = async (req, res) => {
 
 export const updateProduct = async (req, res) => {
     try {
-
         const { id } = req.params;
         const userId = req.user.sub;
 
-        const { productName, productPrice, category } = req.body;
+        const { productName, originalPrice, productPrice, category } = req.body;
 
         const updateFields = {};
 
         if (productName) updateFields.productName = productName;
+        if (originalPrice) updateFields.originalPrice = originalPrice;
         if (productPrice) updateFields.productPrice = productPrice;
         if (category) updateFields.category = category;
 
+
+        if (productName) {
+            const existingProduct = await Product.findOne({
+                productName,
+                userId,
+                _id: { $ne: id }
+            });
+
+            if (existingProduct) {
+                return res.status(409).json({
+                    message: "Product already exists"
+                });
+            }
+        }
+
         const updatedProduct = await Product.findOneAndUpdate(
             { _id: id, userId },
-            updateFields,
+            { $set: updateFields },
             { new: true }
         );
 
@@ -132,6 +147,7 @@ export const updateProduct = async (req, res) => {
         });
 
     } catch (error) {
+        console.error(error);
         return res.status(500).json({
             message: "Server error"
         });
