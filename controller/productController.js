@@ -2,6 +2,8 @@ import Product from "../model/productModel.js";
 
 export const addProduct = async (req, res) => {
     const userId = req.user.sub;
+    console.log(req);
+    
     const { productName, originalPrice, productPrice, category } = req.body;
     try {
         if (!productName || !originalPrice || !productPrice || !category) {
@@ -20,7 +22,8 @@ export const addProduct = async (req, res) => {
             originalPrice,
             productPrice,
             category,
-            userId
+            userId,
+          image: req.file ? req.file.path : null
         });
 
         await newProduct.save();
@@ -42,6 +45,9 @@ export const getAllProducts = async (req, res) => {
         const products = await Product
             .find()
             .populate("category");
+
+            console.log(products);
+            
 
         return res.status(200).json(products);
 
