@@ -21,7 +21,7 @@ export const createAdmin = async (req, res) => {
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 30);
 
-        // creating shop inside this user table for set a shopId in user Schema
+        // creating shop inside this user table for set a shopId in user Schem
         const shop = await Shop.create({
             shopName,
             ownerName,
