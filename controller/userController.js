@@ -72,6 +72,76 @@ export const createSalesman = async (req, res) => {
     return res.status(201).json({ message: "User Created Successfully" });
 };
 
+export const singleUser = async (req, res) => {
+    const { id } = req.params
+
+    try {
+        const user = await User.findById(id).select("-password");
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+                status: false
+            });
+        }
+        return res.status(200).json({
+            message: "User fetched successfully",
+            status: true,
+            data: user
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: "Server error",
+        });
+    }
+}
+
+export const updateUser = async (req, res) => {
+    const { id } = req.params
+    const { shopId } = req.user
+    const { email } = req.body
+    console.log(email);
+
+
+    try {
+
+        if (!email) {
+            return res.status(400).json({ message: "Email is required" })
+        }
+
+        const user = await User.findOne({ _id: id, shopId }).select("-password")
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" })
+        }
+
+        if (user.email === email) {
+            return res.status(200).json({ message: "No changes detected" })
+        }
+
+        const existingUser = await User.findOne({ email, shopId })
+
+
+        if (existingUser && existingUser._id.toString() !== id) {
+            return res.status(400).json({ message: "User already exists. Try different email" })
+        }
+
+        user.email = email
+
+        await user.save()
+
+        return res.status(200).json({
+            message: "User updated successfully",
+            data: user
+        })
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Server error",
+            stack: error.stack
+        });
+    }
+}
+
 export const loginUser = async (req, res) => {
     const { email, password } = req.body;
 
@@ -132,22 +202,59 @@ export const loginUser = async (req, res) => {
 
 export const allUser = async (req, res) => {
     try {
+
         const shopId = req.user.shopId
-        const users = await User.find({ shopId }).select("-password");
+        const page = parseInt(req.query.page) || 1;
+        const limit = 5;
+        const skip = (page - 1) * limit;
+
+        const search = req.query.search || "";
+
+        const query = {
+            shopId: shopId,
+            email: { $regex: search, $options: "i" }
+        };
+
+        const users = await User.find(query)
+            .skip(skip)
+            .limit(limit);
+
+        const totalUsers = await User.countDocuments(query);
 
         return res.status(200).json({
-            status: true,
-            message: "User fetched successfully",
             data: users,
+            totalPages: Math.ceil(totalUsers / limit),
+            currentPage: page
         });
 
     } catch (error) {
-        return res.status(500).json({
-            status: false,
-            message: "Server error",
-        });
+        return res.status(500).json({ message: "Server error" });
     }
 };
+
+export const bulkDeleteUser = async (req, res) => {
+    try {
+        const { ids } = req.body
+
+        if (!ids || ids.length === 0) {
+            return res.status(400).json({ message: "no User selected" })
+        }
+
+        await User.deleteMany({
+            _id: { $in: ids }
+        })
+        return res.status(200).json({
+            message: "Users deleted successfully"
+        })
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Server Error"
+        })
+
+    }
+}
+
 
 export const deleteUser = async (req, res) => {
     try {
