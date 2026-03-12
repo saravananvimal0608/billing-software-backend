@@ -43,15 +43,29 @@ export const getAllProducts = async (req, res) => {
 
         const shopId = req.user.shopId
 
+        const page = parseInt(req.query.page) || 1;
+
+        const limit = 5;
+
+        const skip = (page - 1) * limit;
+
+
+        const search = req.query.search || "";
+
+        const query = {
+            shopId: shopId,
+            productName: { $regex: search, $options: "i" }
+        };
+
         const products = await Product
-            .find({ shopId })
-            .populate("category");
+            .find(query)
+            .populate("category")
+            .skip(skip)
+            .limit(limit);
 
-        if (products.length === 0) {
-            return res.status(200).json({ message: "No products found" });
-        }
+        const totalCategory = await Product.countDocuments({ shopId });
 
-        return res.status(200).json(products);
+        return res.status(200).json({ products, currentPage: page, totalPages: Math.ceil(totalCategory / limit) });
 
     } catch (error) {
         return res.status(500).json({ message: "Server error" });
@@ -61,7 +75,7 @@ export const getAllProducts = async (req, res) => {
 export const getSingleProduct = async (req, res) => {
     try {
 
-                const shopId = req.user.shopId
+        const shopId = req.user.shopId
 
         const { id } = req.params;
 
@@ -124,7 +138,8 @@ export const updateProduct = async (req, res) => {
         if (productName) {
             const existingProduct = await Product.findOne({
                 productName,
-                shopId
+                shopId,
+                _id: { $ne: id }
             });
 
             if (existingProduct) {
@@ -183,3 +198,55 @@ export const deleteProduct = async (req, res) => {
         return res.status(500).json({ message: "Server error" });
     }
 };
+
+
+
+export const getProductWithoutPagination = async (req, res) => {
+    try {
+
+        const shopId = req.user.shopId;
+
+        const products = await Product
+            .find({ shopId })
+            .select("_id productName")
+            .populate("category", "_id categoryName")
+
+        return res.status(200).json({ products });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Server error",
+            stack: error.stack,
+        });
+    }
+};
+
+export const bulkDeleteProducts = async (req, res) => {
+
+    try {
+
+        const { ids } = req.body
+
+        if (!ids || ids.length === 0) {
+            return res.status(400).json({
+                message: "No products selected"
+            })
+        }
+
+        await Product.deleteMany({
+            _id: { $in: ids }
+        })
+
+        return res.status(200).json({
+            message: "Products deleted successfully"
+        })
+
+    } catch (error) {
+
+        return res.status(500).json({
+            message: "Server Error"
+        })
+
+    }
+
+}

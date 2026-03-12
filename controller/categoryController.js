@@ -38,13 +38,89 @@ export const addCategory = async (req, res) => {
     }
 }
 
+export const getCategoriesWithoutPagination = async (req, res) => {
+    try {
+
+        const shopId = req.user.shopId;
+
+        const categories = await Category
+            .find({ shopId })
+            .select("_id categoryName");
+
+        return res.status(200).json({ categories });
+
+    } catch (error) {
+
+        return res.status(500).json({
+            message: "Server ",
+            stack: error.stack,
+        });
+    }
+};
+
+export const bulkDeleteCategories = async (req, res) => {
+    try {
+        const { ids } = req.body
+
+
+        if (!ids || ids.length === 0) {
+            return res.status(400).json({ message: "no category selected" })
+        }
+        const productExists = await Product.findOne({
+            category: { $in: ids }
+        })
+
+        if (productExists) {
+            return res.status(400).json({
+                message: "Cannot delete category because products exist in this category"
+            })
+        }
+
+
+        await Category.deleteMany({
+            _id: { $in: ids }
+        })
+        return res.status(200).json({
+            message: "Categories deleted successfully"
+        })
+
+    } catch (error) {
+        return res.status(500).json({
+            message: "Server Error"
+        })
+
+    }
+}
+
 export const getAllCategories = async (req, res) => {
     try {
 
         const shopId = req.user.shopId
-        const categories = await Category.find({ shopId });
 
-        return res.status(200).json(categories);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 5;
+
+        const skip = (page - 1) * limit;
+
+        const search = req.query.search || "";
+
+        const query = {
+            shopId: shopId,
+            categoryName: { $regex: search, $options: "i" }
+        }
+
+        const categories = await Category
+            .find(query)
+            .skip(skip)
+            .limit(limit);
+
+        const totalCategory = await Category.countDocuments(query);
+
+        return res.status(200).json({
+            categories,
+            currentPage: page,
+            totalPages: Math.ceil(totalCategory / limit)
+        });
 
     } catch (error) {
         return res.status(500).json({
