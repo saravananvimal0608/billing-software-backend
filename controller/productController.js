@@ -63,7 +63,7 @@ export const getAllProducts = async (req, res) => {
             .skip(skip)
             .limit(limit);
 
-        const totalCategory = await Product.countDocuments({ shopId });
+        const totalCategory = await Product.countDocuments(query);
 
         return res.status(200).json({ products, currentPage: page, totalPages: Math.ceil(totalCategory / limit) });
 
