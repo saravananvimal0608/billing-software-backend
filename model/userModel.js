@@ -1,32 +1,43 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema({
-    email: {
-        type: String,
-        required: true
+  email: {
+    type: String,
+    required: true,
+  },
+  password: {
+    type: String,
+    required: true,
+  },
+  shopId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Shop",
+    required: function () {
+      return this.role !== "superadmin";
     },
-    password: {
-        type: String,
-        required: true
-    },
-    shopId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Shop",
-        required: function () {
-            return this.role !== "superadmin";
-        }
-    },
-    resetPasswordToken: {
-        type: String,
-    },
-    resetPasswordExpire: {
-        type: Date,
-    },
-    role: {
-        type: String,
-        default: "salesman",
-        required: true
-    }
-})
-const User = mongoose.model('User', userSchema);
+  },
+  role: {
+    type: String,
+    default: "salesman",
+    required: true,
+  },
+
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
+
+  otp: {
+    type: String,
+  },
+
+  otpExpiry: {
+    type: Date,
+  },
+
+  tempEmail: {
+    type: String,
+  },
+});
+const User = mongoose.model("User", userSchema);
 export default User;

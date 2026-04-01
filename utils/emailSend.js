@@ -1,46 +1,43 @@
-import nodemailer from 'nodemailer'
+import nodemailer from "nodemailer";
 
-export const emailSend = async (user, token, res) => {
-
+export const emailSend = async (user, token, subject, text) => {
+  try {
     const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-            user: "saravananvimal0608@gmail.com",
-            pass: "pagu eili flzd kmwh"
-        }
-    })
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
 
     const message = {
-        from: "saravananvimal0608@gmail.com",
-        to: user.email,
-        subject: "Forgot Password",
-        text: `
-Hello ${user.email},
+      from: process.env.EMAIL_USER,
 
-We received a request to reset your password.
+      // ✅ IMPORTANT FIX
+      to: user.tempEmail || user.email,
 
-Your One-Time Password (OTP) is:
+      subject: subject,
 
-${token}
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <h2 style="color: #2E86C1;">Hello ${user.email},</h2>
+          <p>We received a request to <strong>${text}</strong>.</p>
+          <p>Your One-Time Password (OTP) is:</p>
+          <h1 style="background: #f2f2f2; padding: 10px; text-align: center; letter-spacing: 5px;">${token}</h1>
+          <p>This OTP is valid for <strong>15 minutes</strong>.</p>
+          <p>Please do not share this OTP with anyone for security reasons.</p>
+          <p>If you did not request a <strong>${subject}</strong>, please ignore this email.</p>
+          <br />
+          <p>Thank you,<br /><strong>Cotechies Team</strong></p>
+        </div>
+      `,
+    };
 
-This OTP is valid for 15 minutes.
+    await transporter.sendMail(message);
 
-Please do not share this OTP with anyone for security reasons.
-
-If you did not request a password reset, please ignore this email.
-
-Thank you,
-Your App Team
-`
-    }
-
-    transporter.sendMail(message, (err, info) => {
-        if (err) {
-            return res.status(400).json({
-                message: "something went wrong"
-            })
-        }
-        return res.status(200).json({ message: "email sent to your mail id" })
-    })
-
-}
+    return true; 
+  } catch (error) {
+    console.error("Email Error:", error);
+    return false; 
+  }
+};

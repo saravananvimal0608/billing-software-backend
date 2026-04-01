@@ -22,7 +22,8 @@ export const addProduct = async (req, res) => {
             productName,
             productPrice,
             category,
-            shopId
+            shopId,
+            
         });
 
         await newProduct.save();

@@ -1,4 +1,5 @@
 const superAdmin = (req, res, next) => {
+    
     if (req.user && req.user.role === "superadmin") {
         next()
     }

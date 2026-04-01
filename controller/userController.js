@@ -8,6 +8,7 @@ import { subscriptionPlan } from "../utils/subscriptionPlan.js";
 export const createAdmin = async (req, res) => {
   const { shopName, ownerName, mobileNumber, address, email, password } =
     req.body;
+
   try {
     if (
       !shopName ||
@@ -17,73 +18,201 @@ export const createAdmin = async (req, res) => {
       !email ||
       !password
     ) {
-      return res.status(400).json({ message: "All Field Are Required" });
+      return res.status(400).json({ message: "All fields are required" });
     }
 
+    //  check existing email
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res
-        .status(400)
-        .json({ message: "User Already Exists Try Different Email" });
+      return res.status(400).json({
+        message: "User already exists. Try different email",
+      });
     }
 
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + 30);
-
-    // creating shop inside this user table for set a shopId in user Schem
+    //  create shop
     const shop = await Shop.create({
       shopName,
       ownerName,
       mobileNumber,
       address,
-      subscriptionExpiry: expiryDate, // 30 days
     });
 
+    //  hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({
-      email: email,
+
+    //  OTP generate
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    // create user
+    const newUser = await User.create({
+      email,
       password: hashedPassword,
       shopId: shop._id,
       role: "admin",
+      otp,
+      otpExpiry,
+      isVerified: false,
     });
-    await newUser.save();
-    return res.status(201).json({ message: "Shop Registered successfully" });
-  } catch (error) {
-    return res
-      .status(500)
-      .json({
-        message: "Server error",
-        error: error.message,
-        stack: error.stack,
+
+    // send OTP
+    const isSent = await emailSend(
+      newUser,
+      otp,
+      "Register Account",
+      "Register Your Account",
+    );
+
+    if (!isSent) {
+      return res.status(500).json({
+        message: "Failed to send email",
       });
+    }
+
+    return res.status(200).json({
+      message: "OTP sent successfully. Please verify your email",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+// common for all verify otp
+export const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({
+      $or: [{ email }, { tempEmail: email }],
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!user.otp || user.otp !== otp) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    if (!user.otpExpiry || user.otpExpiry < new Date()) {
+      return res.status(400).json({ message: "OTP expired" });
+    }
+
+    //  if updating email
+    if (user.tempEmail) {
+      user.email = user.tempEmail;
+      user.tempEmail = null;
+    }
+
+    // normal verify
+    user.isVerified = true;
+    user.otp = null;
+    user.otpExpiry = null;
+
+    await user.save();
+
+    return res.status(200).json({
+      message: "Email verified successfully",
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Error verifying OTP" });
   }
 };
 
 export const createSalesman = async (req, res) => {
-  const { email, password } = req.body;
   const shopId = req.user.shopId;
+  const { email, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email And Password Are Required" });
+  try {
+    const shopDetails = await Shop.findById(shopId);
+
+    if (!shopDetails) {
+      return res.status(404).json({ message: "Shop not found" });
+    }
+
+    // restricted plan based users create
+    const subscriptionPlan = shopDetails.subscriptionPlan;
+
+    const planLimits = {
+      Basic: 1,
+      Pro: 2,
+      Premium: 3,
+    };
+
+    const maxUsers = planLimits[subscriptionPlan] || 0;
+
+    const usersCount = await User.countDocuments({
+      shopId,
+      role: "salesman",
+    });
+    if (usersCount >= maxUsers) {
+      return res.status(400).json({
+        message: `Your ${subscriptionPlan} plan allows only ${maxUsers} users. Please upgrade.`,
+      });
+    }
+
+    
+    // restricted plan based users create end //
+
+    // validation
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Email and Password are required",
+      });
+    }
+
+    // check existing user
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+      return res.status(400).json({
+        message: "User already exists. Try different email",
+      });
+    }
+
+    // hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // OTP generate
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    // create user
+    const salesman = await User.create({
+      email,
+      password: hashedPassword,
+      shopId,
+      otp,
+      otpExpiry,
+      isVerified: false,
+    });
+
+    // send OTP
+    const isSent = await emailSend(
+      salesman,
+      otp,
+      "Register Account",
+      "Register Your Account",
+    );
+
+    if (!isSent) {
+      return res.status(500).json({
+        message: "Failed to send email",
+      });
+    }
+
+    return res.status(200).json({
+      message: "OTP sent successfully. Please verify your email",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server error",
+      stack: error.stack,
+    });
   }
-
-  const existingUser = await User.findOne({ email });
-
-  if (existingUser) {
-    return res
-      .status(400)
-      .json({ message: "User Already Exists Try Different Email" });
-  }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const salesman = await User.create({
-    email,
-    password: hashedPassword,
-    shopId,
-  });
-
-  return res.status(201).json({ message: "User Created Successfully" });
 };
 
 export const singleUser = async (req, res) => {
@@ -113,38 +242,57 @@ export const updateUser = async (req, res) => {
   const { id } = req.params;
   const { shopId } = req.user;
   const { email } = req.body;
-  console.log(email);
 
   try {
+    // ✅ email check
     if (!email) {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    const user = await User.findOne({ _id: id, shopId }).select("-password");
+    // ✅ find user
+    const user = await User.findOne({ _id: id, shopId });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    if (user.email === email) {
-      return res.status(200).json({ message: "No changes detected" });
-    }
-
-    const existingUser = await User.findOne({ email, shopId });
+    // ✅ check email already exists globally
+    const existingUser = await User.findOne({ email });
 
     if (existingUser && existingUser._id.toString() !== id) {
       return res
         .status(400)
-        .json({ message: "User already exists. Try different email" });
+        .json({ message: "Email already in use. Try different email" });
     }
 
-    user.email = email;
+    // ✅ OTP generate
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    // ✅ IMPORTANT: don't update email directly
+    user.tempEmail = email;
+    user.otp = otp;
+    user.otpExpiry = otpExpiry;
+    user.isVerified = false;
 
     await user.save();
 
+    const isSent = await emailSend(
+      user,
+      otp,
+      "Verify your email",
+      "Verify your email",
+    );
+
+    if (!isSent) {
+      return res.status(500).json({
+        message: "Failed to send email",
+      });
+    }
+
     return res.status(200).json({
-      message: "User updated successfully",
-      data: user,
+      message: "OTP sent to new email. Please verify to update email",
     });
   } catch (error) {
     return res.status(500).json({
@@ -165,6 +313,7 @@ export const loginUser = async (req, res) => {
     }
 
     const existingUser = await User.findOne({ email });
+
     if (!existingUser) {
       return res.status(404).json({
         message: "User Not Found",
@@ -191,22 +340,33 @@ export const loginUser = async (req, res) => {
     const payload = {
       sub: existingUser._id,
       username: existingUser.email,
-      shopId: existingUser.shopId ? existingUser.shopId : "",
       role: existingUser.role,
+      ...(existingUser.role !== "superadmin" && {
+        shopId: existingUser.shopId ? existingUser.shopId : "",
+      }),
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET_KEY, {
       expiresIn: "24h",
     });
 
-    const subscription = await subscriptionPlan(existingUser.role,existingUser.shopId);
+    // subscription (declare outside)
+    let subscription = null;
 
+    if (existingUser.role !== "superadmin") {
+      subscription = await subscriptionPlan(
+        existingUser.role,
+        existingUser.shopId,
+      );
+    }
     return res.status(200).json({
       data: email,
       message: "User logged in successfully",
       token,
       role: existingUser.role,
-      subscriptionPlan: subscription,
+      ...(existingUser.role !== "superadmin" && {
+        subscriptionPlan: subscription,
+      }),
     });
   } catch (error) {
     return res.status(500).json({
@@ -216,7 +376,7 @@ export const loginUser = async (req, res) => {
   }
 };
 
-export const allUser = async (req, res) => {
+export const allUserByShop = async (req, res) => {
   try {
     const shopId = req.user.shopId;
     const page = parseInt(req.query.page) || 1;
@@ -298,57 +458,103 @@ export const deleteUser = async (req, res) => {
   }
 };
 
-export const updatePassword = async (req, res) => {
+export const forgotPassword = async (req, res) => {
   const { email } = req.body;
-  const user = await User.findOne({ email });
 
   try {
+    const user = await User.findOne({ email });
+
     if (!user) {
       return res.status(404).json({
-        message: "user not found",
-        status: false,
+        message: "User not found",
       });
     }
 
-    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    // OTP generate
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    user.resetPasswordToken = token;
-    user.resetPasswordExpire = Date.now() + 3600000;
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    // store OTP
+    user.otp = otp;
+    user.otpExpiry = otpExpiry;
 
     await user.save();
 
-    emailSend(user, token, res);
+    // send email
+    const isSent = await emailSend(
+      user,
+      otp,
+      "Forgot Password",
+      "reset your password",
+    );
+
+    if (!isSent) {
+      return res.status(500).json({
+        message: "Failed to send OTP",
+      });
+    }
+
+    return res.status(200).json({
+      message: "OTP sent to your email",
+    });
   } catch (error) {
-    return res.status(500).json({ message: error.message, stack: error.stack });
+    return res.status(500).json({
+      message: error.message,
+    });
   }
 };
 
 export const resetPassword = async (req, res) => {
-  const { token } = req.params;
-  const { password } = req.body;
+  const { email, otp, password } = req.body;
 
   try {
-    const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpire: { $gt: Date.now() },
-    });
+    const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(404).json({ message: "Invalid Otp" });
+      return res.status(404).json({
+        message: "User not found",
+      });
     }
+
+    //  OTP check
+    if (!user.otp || user.otp !== otp) {
+      return res.status(400).json({
+        message: "Invalid OTP",
+      });
+    }
+
+    if (!user.otpExpiry || user.otpExpiry < new Date()) {
+      return res.status(400).json({
+        message: "OTP expired",
+      });
+    }
+
     if (!password) {
-      return res.status(400).json({ message: "Password Is Required" });
+      return res.status(400).json({
+        message: "Password is required",
+      });
     }
+
+    //  hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    //  update password
     user.password = hashedPassword;
-    user.resetPasswordToken = null;
-    user.resetPasswordExpire = null;
+
+    // clear OTP
+    user.otp = null;
+    user.otpExpiry = null;
 
     await user.save();
-    return res.status(201).json({ message: "Password Changed Successfully" });
+
+    return res.status(200).json({
+      message: "Password reset successful",
+    });
   } catch (error) {
-    return res.status(500).json({ message: error.message, stack: error.stack });
+    return res.status(500).json({
+      message: error.message,
+    });
   }
 };
 
@@ -360,6 +566,14 @@ export const createSuperAdmin = async (req, res) => {
       return res
         .status(400)
         .json({ message: "Email And Password Are Required" });
+    }
+
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+      return res.status(400).json({
+        message: "User already exists",
+      });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -375,5 +589,32 @@ export const createSuperAdmin = async (req, res) => {
       .json({ message: "Super Admin Created Successfully" });
   } catch (error) {
     return res.status(500).json({ message: error.message, stack: error.stack });
+  }
+};
+
+export const allUser = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 5;
+    const skip = (page - 1) * limit;
+
+    const search = req.query.search || "";
+
+    const query = {
+      email: { $regex: search, $options: "i" },
+    };
+
+    const users = await User.find(query).skip(skip).limit(limit);
+
+    const totalUsers = await User.countDocuments(query);
+
+    return res.status(200).json({
+      data: users,
+      totalPages: Math.ceil(totalUsers / limit),
+      currentPage: page,
+      totalUsers: totalUsers,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
   }
 };

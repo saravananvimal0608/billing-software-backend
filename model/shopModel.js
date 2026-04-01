@@ -1,18 +1,40 @@
 import mongoose from "mongoose";
 
-const shopSchema = new mongoose.Schema({
+const shopSchema = new mongoose.Schema(
+  {
     shopName: { type: String, required: true },
     ownerName: { type: String, required: true },
     mobileNumber: { type: String, required: true },
     address: { type: String },
     subscriptionPlan: {
-        type: String,
-        enum: ["Basic", "Pro", "Premium"],
-        default: "Basic"
+      type: String,
+      enum: ["Basic", "Pro", "Premium"],
+      default: "Basic",
     },
-    subscriptionExpiry: { type: Date }
-}, { timestamps: true });
+    bannerType: {
+      type: String,
+    },
+    bannerImage: {
+      type: String,
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid"],
+      default: "pending",
+    },
+    subscriptionStartDate: { type: Date },
+    subscriptionExpiry: { type: Date },
+    upgradePlanName: {
+      type: String,
+    },
+    upgradeStatus: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { timestamps: true },
+);
 
 const Shop = mongoose.model("Shop", shopSchema);
 
-export default Shop
+export default Shop;

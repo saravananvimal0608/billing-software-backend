@@ -10,10 +10,9 @@ export const subscriptionPlan = async (role, shopId) => {
     if (!shop) {
       return null;
     }
-    console.log("shop.subscriptionPlan",shop.subscriptionPlan);
     
 
-    if (shop.subscriptionPlan === "Basic" || shop.subscriptionPlan === "Pro") {
+    if (shop.subscriptionPlan === "Basic" || shop.subscriptionPlan === "Pro" || shop.subscriptionPlan === "Premium") {
       return shop.subscriptionPlan;
     }
     return null;

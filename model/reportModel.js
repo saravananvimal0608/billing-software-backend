@@ -5,7 +5,7 @@ const reportSchema = new mongoose.Schema(
     subject: {
       type: String,
     },
-     description: {
+    description: {
       type: String,
     },
     status: {
@@ -17,17 +17,17 @@ const reportSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Shop",
     },
+    resolvedAt: {   
+      type: Date,
+    },
   },
   {
     timestamps: true,
-  },
+  }
 );
 
-reportSchema.index(
-  { createdAt: 1 },
-  { expireAfterSeconds: 2592000 } //30 days
-);
-
+// 🔥 TTL index
+reportSchema.index({ resolvedAt: 1 }, { expireAfterSeconds: 2592000 });
 
 const Report = mongoose.model("Report", reportSchema);
 export default Report;
