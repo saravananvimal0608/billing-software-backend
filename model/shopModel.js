@@ -31,6 +31,15 @@ const shopSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    stayCurrentPlan:{
+      type:Boolean,
+      default:false
+    },
+    nextPlan: {
+      type: String,
+      enum: ["Basic", "Pro", "Premium"],
+      default: null,
+    },
   },
   { timestamps: true },
 );

@@ -27,7 +27,7 @@ export const getShopDetails = async (req, res) => {
 
 export const upgradePlanRequest = async (req, res) => {
   const shopId = req.user.shopId;
-  const { upgradePlanName, upgradeStatus } = req.body;
+  const { upgradePlanName, upgradeStatus, stayCurrentPlan } = req.body;
 
   try {
     if (!shopId) {
@@ -43,6 +43,7 @@ export const upgradePlanRequest = async (req, res) => {
       {
         upgradePlanName: upgradePlanName,
         upgradeStatus: upgradeStatus,
+        stayCurrentPlan: stayCurrentPlan,
       },
       { new: true },
     );
@@ -53,8 +54,9 @@ export const upgradePlanRequest = async (req, res) => {
 
     // 4. Success response
     return res.status(200).json({
-      message:
-        "Your plan will be upgraded within 48 hours. Our team will contact you soon.",
+      message: stayCurrentPlan
+        ? "Your renewal request has been sent. Your current plan will be extended within 24 hours."
+        : "Your upgrade request has been sent. Our team will process it within 24 hours.",
       data: updatedShop,
     });
   } catch (error) {
@@ -66,7 +68,7 @@ export const upgradePlanRequest = async (req, res) => {
 };
 
 export const approveUpgrade = async (req, res) => {
-  const { shopId, plan } = req.body;
+  const { shopId, plan, paymentStatus } = req.body;
 
   try {
     const shop = await Shop.findById(shopId);
@@ -75,51 +77,109 @@ export const approveUpgrade = async (req, res) => {
       return res.status(404).json({ message: "Shop not found" });
     }
 
-    const planLimits = {
-      Basic: 1,
-      Pro: 2,
-      Premium: 3,
-    };
+    if (!shop.stayCurrentPlan && !paymentStatus) {
+      return res.status(400).json({ message: "payment status required" });
+    }
 
-    const maxUsers = planLimits[plan];
+    //  CASE 1: Stay Current Plan (Renewal)
+    if (shop.stayCurrentPlan) {
+      const today = new Date();
 
-    // 🔥 current salesman count
-    const users = await User.find({
-      shopId,
-      role: "salesman",
-    }).sort({ createdAt: 1 }); // 👈 oldest first
+      const baseDate =
+        shop.subscriptionExpiry && shop.subscriptionExpiry > today
+          ? shop.subscriptionExpiry
+          : today;
 
-    const usersCount = users.length;
+      const newExpiry = new Date(baseDate);
+      newExpiry.setDate(newExpiry.getDate() + 30);
 
-    // 🔥 if exceeded → delete extra users
-    if (usersCount > maxUsers) {
-      const usersToDelete = users.slice(maxUsers); // keep first N, delete rest
+      const updatedShop = await Shop.findByIdAndUpdate(
+        shopId,
+        {
+          subscriptionStartDate: today,
+          subscriptionExpiry: newExpiry,
+          paymentStatus: paymentStatus,
+          stayCurrentPlan: false,
+          upgradeStatus: false,
+        },
+        { new: true }
+      );
 
-      await User.deleteMany({
-        _id: { $in: usersToDelete.map((u) => u._id) },
+      return res.status(200).json({
+        message: "Plan renewed successfully",
+        data: updatedShop,
       });
     }
 
-    // ✅ update plan
-    const startDate = new Date();
-    const expiryDate = new Date();
-    expiryDate.setMonth(expiryDate.getMonth() + 1);
+    //  CASE 2: Change Plan
+    if (!plan) {
+      return res.status(400).json({ message: "Plan is required" });
+    }
 
+    const currentPlan = shop.subscriptionPlan;
+    const today = new Date();
+    const isExpired =
+      !shop.subscriptionExpiry || shop.subscriptionExpiry < today;
+
+    //  CASE 2A: Basic → Pro (Instant)
+    if (currentPlan === "Basic" && plan === "Pro") {
+      const startDate = new Date();
+      const expiryDate = new Date();
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+
+      // user limit logic
+      const planLimits = { Basic: 1, Pro: 2, Premium: 3 };
+      const maxUsers = planLimits[plan];
+
+      const users = await User.find({
+        shopId,
+        role: "salesman",
+      }).sort({ createdAt: 1 });
+
+      if (users.length > maxUsers) {
+        const usersToDelete = users.slice(maxUsers);
+        await User.deleteMany({
+          _id: { $in: usersToDelete.map((u) => u._id) },
+        });
+      }
+
+      const updatedShop = await Shop.findByIdAndUpdate(
+        shopId,
+        {
+          subscriptionPlan: plan,
+          paymentStatus,
+          subscriptionStartDate: startDate,
+          subscriptionExpiry: expiryDate,
+          upgradeStatus: false,
+          upgradePlanName: null,
+          stayCurrentPlan: false,
+        },
+        { new: true }
+      );
+
+      return res.status(200).json({
+        message: "Plan upgraded to Pro",
+        data: updatedShop,
+      });
+    }
+
+   
+
+    //  CASE 2C: All other cases → WAIT till expiry
     const updatedShop = await Shop.findByIdAndUpdate(
       shopId,
       {
-        subscriptionPlan: plan,
-        paymentStatus: "paid",
-        subscriptionStartDate: startDate,
-        subscriptionExpiry: expiryDate,
+        nextPlan: plan, // 👈 IMPORTANT
+        paymentStatus,
         upgradeStatus: false,
         upgradePlanName: null,
+        stayCurrentPlan: false,
       },
-      { returnDocument: "after" }
+      { new: true }
     );
 
     return res.status(200).json({
-      message: "Plan updated successfully (extra users removed)",
+      message: "Plan will be changed after current plan expiry",
       data: updatedShop,
     });
 
@@ -179,9 +239,31 @@ export const getAllShops = async (req, res) => {
       shopName: { $regex: search, $options: "i" },
     };
 
-    const data = await Shop.find(query).skip(skip).limit(limit);
+    let data = await Shop.find(query).skip(skip).limit(limit);
 
     const totalShops = await Shop.countDocuments(query);
+
+    const today = new Date();
+
+    //  AUTO PLAN SWITCH LOGIC
+    for (let shop of data) {
+      if (
+        shop.subscriptionExpiry &&
+        shop.subscriptionExpiry < today &&
+        shop.nextPlan
+      ) {
+        const newStart = new Date();
+        const newExpiry = new Date();
+        newExpiry.setMonth(newExpiry.getMonth() + 1);
+
+        shop.subscriptionPlan = shop.nextPlan;
+        shop.subscriptionStartDate = newStart;
+        shop.subscriptionExpiry = newExpiry;
+        shop.nextPlan = null;
+
+        await shop.save();
+      }
+    }
 
     if (data.length === 0) {
       return res.status(200).json({
@@ -200,7 +282,6 @@ export const getAllShops = async (req, res) => {
     return res.status(500).json({
       message: "Server error",
       error: error.message,
-      stack: error.stack,
     });
   }
 };
@@ -256,4 +337,3 @@ export const deleteShops = async (req, res) => {
     });
   }
 };
-
