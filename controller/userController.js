@@ -154,7 +154,6 @@ export const createSalesman = async (req, res) => {
       });
     }
 
-    
     // restricted plan based users create end //
 
     // validation
@@ -317,6 +316,13 @@ export const loginUser = async (req, res) => {
     if (!existingUser) {
       return res.status(404).json({
         message: "User Not Found",
+      });
+    }
+
+    if (!existingUser.isActive) {
+      return res.status(403).json({
+        success: false,
+         message: "Account deactivated. Contact admin or upgrade plan.",
       });
     }
 

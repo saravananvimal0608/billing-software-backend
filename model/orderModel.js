@@ -27,6 +27,8 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+orderSchema.index({ createdAt: 1 }, { expireAfterSeconds: 15552000 }); // after six months data deleted
+
 const Order = mongoose.model("Orders", orderSchema);
 
 export default Order;
