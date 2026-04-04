@@ -14,10 +14,13 @@ const router = express.Router();
 
 router.post(
   "/",
-  upload.single("banner"),
+  upload.fields([
+    { name: "banner", maxCount: 5 },
+    { name: "advertisement", maxCount: 5 },
+  ]),
   authMiddleware,
   superAdmin,
-  uploadBanner,
+  uploadBanner
 );
 router.get("/", authMiddleware, adminMiddleware, getBannerForShop);
 router.delete("/:id", authMiddleware, superAdmin, deleteBanner);

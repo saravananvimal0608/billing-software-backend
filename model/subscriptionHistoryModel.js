@@ -12,16 +12,16 @@ const subscriptionHistorySchema = new mongoose.Schema(
     amount: Number,
     paymentStatus: {
       type: String,
-      enum: ["Paid", "Pending"],
-      default: "Paid",
+      enum: ["paid", "pending"],
+      default: "pending",
     },
     startDate: Date,
     expiryDate: Date,
   },
-  { timestamps: true }
+  { timestamps: true },
 );
-
-export default mongoose.model(
+const subscriptionHistory = mongoose.model(
   "SubscriptionHistory",
-  subscriptionHistorySchema
+  subscriptionHistorySchema,
 );
+export default subscriptionHistory;

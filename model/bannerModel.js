@@ -3,10 +3,14 @@ import mongoose from "mongoose";
 const bannerSchema = new mongoose.Schema({
   bannerType: {
     type: String,
-    enum: ["All","Basic", "Pro", "Premium"],
+    enum: ["All", "Basic", "Pro", "Premium"],
     required: true,
   },
   bannerImage: {
+    type: String,
+    required: true,
+  },
+  public_id: {
     type: String,
     required: true,
   },

@@ -6,27 +6,39 @@ export const uploadBanner = async (req, res) => {
   const { bannerType } = req.body;
 
   try {
-    if (!req.file) {
-      return res.status(400).json({ message: "No image uploaded" });
+    if (!bannerType) {
+      return res.status(400).json({ message: "bannerType is required" });
     }
 
-    const imageUrl = req.file.path;
+    if (!req.files || Object.keys(req.files).length === 0) {
+      return res.status(400).json({ message: "No images uploaded" });
+    }
 
-    const banner = await Banner.findOneAndUpdate(
-      { bannerType: bannerType },
-      { bannerImage: imageUrl },
-      { new: true, upsert: true },
+    // Collect all uploaded files from all fields
+    const allFiles = [];
+    Object.keys(req.files).forEach((key) => {
+      req.files[key].forEach((file) => {
+        allFiles.push({ path: file.path, public_id: file.filename });
+      });
+    });
+
+    // Save each image as a separate Banner document
+    const banners = await Banner.insertMany(
+      allFiles.map(({ path, public_id }) => ({
+        bannerType,
+        bannerImage: path,
+        public_id,
+      }))
     );
 
     return res.status(200).json({
-      message: "Banner uploaded successfully",
-      data: banner,
+      message: "Banners uploaded successfully",
+      data: banners,
     });
   } catch (error) {
     return res.status(500).json({
       message: "Upload failed",
       error: error.message,
-      stack: error.stack,
     });
   }
 };
@@ -58,15 +70,13 @@ export const deleteBanner = async (req, res) => {
     }
 
     // delete from cloudinary
-    if (banner.public_id) {
-      await cloudinary.uploader.destroy(banner.public_id);
-    }
+    await cloudinary.uploader.destroy(banner.public_id);
 
     // delete from DB
     await Banner.findByIdAndDelete(id);
 
     return res.status(200).json({
-      message: "Image deleted successfully",
+      message: "Banner deleted successfully",
     });
   } catch (error) {
     return res.status(500).json({ message: "Server Error" });
