@@ -9,6 +9,8 @@ import shopRoutes from "./route/shopRoute.js";
 import reportRoutes from "./route/reportRoute.js";
 import bannerRoutes from "./route/bannerRoute.js";
 import planRoutes from "./route/planRoute.js";
+import paymentRoutes from "./route/paymentRoute.js";
+
 import cors from "cors";
 import planExpiryJob from "./cron/planExpiryJob.js";
 import dns from "dns";
@@ -32,6 +34,7 @@ app.use("/api/shop", shopRoutes);
 app.use("/api/report", reportRoutes);
 app.use("/api/banner", bannerRoutes);
 app.use("/api/plans", planRoutes);
+app.use("/api/payment", paymentRoutes);
 
 app.use("/uploads", express.static("uploads"));
 

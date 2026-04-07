@@ -4,6 +4,7 @@ import Product from "../model/productModel.js";
 import Report from "../model/reportModel.js";
 import Shop from "../model/shopModel.js";
 import User from "../model/userModel.js";
+import Payment from "../model/paymentModel.js";
 import mongoose from "mongoose";
 import { confirmationMail } from "../utils/confirmationMail.js";
 
@@ -13,6 +14,7 @@ export const getShopDetails = async (req, res) => {
     if (!shop) {
       return res.status(404).json({ message: "Shop not found" });
     }
+
     return res.status(200).json({
       message: "Shop details fetched",
       data: shop,
@@ -28,7 +30,7 @@ export const getShopDetails = async (req, res) => {
 
 export const upgradePlanRequest = async (req, res) => {
   const shopId = req.user.shopId;
-  const { upgradePlanName, upgradeStatus, stayCurrentPlan } = req.body;
+  const { upgradePlanName, stayCurrentPlan ,upgradeStatus} = req.body;
 
   try {
     if (!shopId) {
@@ -43,8 +45,8 @@ export const upgradePlanRequest = async (req, res) => {
       shopId,
       {
         upgradePlanName: upgradePlanName,
-        upgradeStatus: upgradeStatus,
         stayCurrentPlan: stayCurrentPlan,
+        upgradeStatus: upgradeStatus
       },
       { new: true },
     );
@@ -94,18 +96,13 @@ export const enforceUserLimit = async (shopId, plan) => {
 };
 
 export const approveUpgrade = async (req, res) => {
-  const { shopId, plan, paymentStatus } = req.body;
-
+  const { shopId, plan } = req.body;
+  
   try {
     const shop = await Shop.findById(shopId);
 
     if (!shop) {
       return res.status(404).json({ message: "Shop not found" });
-    }
-
-    // ❗ Payment check
-    if (!shop.stayCurrentPlan && !paymentStatus) {
-      return res.status(400).json({ message: "Payment status required" });
     }
 
     const today = new Date();
@@ -127,7 +124,6 @@ export const approveUpgrade = async (req, res) => {
         {
           subscriptionStartDate: today,
           subscriptionExpiry: newExpiry,
-          paymentStatus,
           stayCurrentPlan: false,
           upgradeStatus: false,
         },
@@ -165,7 +161,6 @@ export const approveUpgrade = async (req, res) => {
         shopId,
         {
           subscriptionPlan: plan,
-          paymentStatus,
           subscriptionStartDate: startDate,
           subscriptionExpiry: expiryDate,
           upgradeStatus: false,
@@ -191,7 +186,6 @@ export const approveUpgrade = async (req, res) => {
       shopId,
       {
         nextPlan: plan,
-        paymentStatus,
         upgradeStatus: false,
         upgradePlanName: null,
         stayCurrentPlan: false,
@@ -200,9 +194,9 @@ export const approveUpgrade = async (req, res) => {
     );
 
     // sending mail to admin
-    const UserEmail = await User.findOne({ shopId });
-   await confirmationMail(UserEmail.email, plan);
-    
+    const UserEmail = await User.findOne({ shopId, role: "admin" });
+    if (UserEmail) await confirmationMail(UserEmail.email, plan);
+
     return res.status(200).json({
       message: "Plan will be changed after current plan expiry",
       data: updatedShop,
@@ -271,6 +265,7 @@ export const getAllShops = async (req, res) => {
     const today = new Date();
 
     //  AUTO PLAN SWITCH LOGIC
+    //for example
     for (let shop of data) {
       if (
         shop.subscriptionExpiry &&
@@ -297,9 +292,48 @@ export const getAllShops = async (req, res) => {
       });
     }
 
+    const shopIds = data.map((s) => s._id);
+
+    // 1. Get admin users
+    const adminUsers = await User.find({
+      shopId: { $in: shopIds },
+      role: "admin",
+    }).select("shopId email");
+
+    // 2. Get latest payment per shop
+    const payments = await Payment.find({
+      shopId: { $in: shopIds },
+    })
+      .sort({ createdAt: -1 })
+      .select("shopId paymentStatus plan createdAt");
+
+    // 3. Build lookup maps
+    const adminMap = {};
+    adminUsers.forEach((u) => {
+      adminMap[u.shopId.toString()] = u.email;
+    });
+
+    const paymentMap = {};
+    payments.forEach((p) => {
+      const key = p.shopId.toString();
+      if (!paymentMap[key]) paymentMap[key] = p; // first = latest due to sort
+    });
+
+    // 4. Merge with shop data
+    const shopsWithEmail = data.map((shop) => {
+      const payment = paymentMap[shop._id.toString()];
+      return {
+        ...shop.toObject(),
+        adminEmail: adminMap[shop._id.toString()] || "N/A",
+        paymentStatus: payment?.paymentStatus || "pending",
+        paymentPlan: payment?.plan || null,
+        paymentDate: payment?.createdAt || null,
+      };
+    });
+
     return res.status(200).json({
       message: "data fetched",
-      data: data,
+      data: shopsWithEmail,
       totalPages: Math.ceil(totalShops / limit),
       currentPage: page,
     });

@@ -1,4 +1,4 @@
-import { loginUser, createAdmin, allUserByShop, deleteUser, forgotPassword, resetPassword,verifyOtp, createSalesman, createSuperAdmin, singleUser,updateUser ,bulkDeleteUser,allUser} from '../controller/userController.js'
+import { loginUser, createAdmin, allUserByShop, deleteUser, forgotPassword, resetPassword, verifyOtp, resendOtp, createSalesman, createSuperAdmin, singleUser, updateUser, bulkDeleteUser, allUser } from '../controller/userController.js'
 import express from 'express'
 import adminMiddleware from './../middleware/adminMiddleware.js';
 import authMiddleware from '../middleware/authMiddleware.js'
@@ -21,6 +21,7 @@ router.put('/updateUser/:id', authMiddleware, adminMiddleware, updateUser)
 
 // verify email 
 router.post('/verifyotp', verifyOtp)
+router.post('/resendotp', resendOtp)
 
 //common
 router.post('/login', loginUser)

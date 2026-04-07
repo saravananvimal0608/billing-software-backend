@@ -3,12 +3,11 @@ import Shop from "../model/shopModel.js";
 import cloudinary from "../config/cloudinary.js";
 
 export const uploadBanner = async (req, res) => {
-  const { bannerType } = req.body;
-
+    const { bannerType, position } = req.body;
   try {
-    if (!bannerType) {
-      return res.status(400).json({ message: "bannerType is required" });
-    }
+  if (!bannerType || !position) {
+    return res.status(400).json({ message: "bannerType & position required" });
+  }
 
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({ message: "No images uploaded" });
@@ -26,6 +25,7 @@ export const uploadBanner = async (req, res) => {
     const banners = await Banner.insertMany(
       allFiles.map(({ path, public_id }) => ({
         bannerType,
+        position,
         bannerImage: path,
         public_id,
       }))

@@ -2,14 +2,13 @@
 
 import mongoose from "mongoose";
 
-const subscriptionHistorySchema = new mongoose.Schema(
+const paymentModelSchema = new mongoose.Schema(
   {
     shopId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Shop",
     },
     plan: String,
-    amount: Number,
     paymentStatus: {
       type: String,
       enum: ["paid", "pending"],
@@ -20,8 +19,11 @@ const subscriptionHistorySchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-const subscriptionHistory = mongoose.model(
-  "SubscriptionHistory",
-  subscriptionHistorySchema,
+
+//  Auto delete after 6 months
+paymentModelSchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: 60 * 60 * 24 * 30 * 6 }, // 6 months
 );
-export default subscriptionHistory;
+const Payment = mongoose.model("payment", paymentModelSchema);
+export default Payment;

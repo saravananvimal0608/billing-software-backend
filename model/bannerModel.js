@@ -14,6 +14,11 @@ const bannerSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  position: {
+  type: String,
+  enum: ["footer", "popup"],
+  required: true,
+},
 }, { timestamps: true });
 
 const Banner = mongoose.model("Banner", bannerSchema);
